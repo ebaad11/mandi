@@ -1,0 +1,13 @@
+{
+  "name": "denpasar-root",
+  "private": true,
+  "workspaces": [
+    "hello-app"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace hello-app",
+    "start": "npm run start --workspace hello-app",
+    "dev": "npm run dev --workspace hello-app",
+    "deploy": "npm run deploy --workspace hello-app"
+  }
+}
