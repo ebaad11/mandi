@@ -8,7 +8,14 @@
  * @module
  */
 
-import type * as positions from "../positions.js";
+import type * as actions from "../actions.js";
+import type * as advisors from "../advisors.js";
+import type * as crons from "../crons.js";
+import type * as events from "../events.js";
+import type * as players from "../players.js";
+import type * as ticks from "../ticks.js";
+import type * as tiles from "../tiles.js";
+import type * as units from "../units.js";
 
 import type {
   ApiFromModules,
@@ -17,7 +24,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  positions: typeof positions;
+  actions: typeof actions;
+  advisors: typeof advisors;
+  crons: typeof crons;
+  events: typeof events;
+  players: typeof players;
+  ticks: typeof ticks;
+  tiles: typeof tiles;
+  units: typeof units;
 }>;
 
 /**
