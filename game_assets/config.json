@@ -1,0 +1,90 @@
+{
+  "game": {
+    "gridSize": 15,
+    "visibilityRadius": 4,
+    "maxPlayers": 6
+  },
+  "ambassadors": [
+    {
+      "id": "ambassador-1",
+      "name": "Ambassador 1",
+      "specialty": "exploration",
+      "color": "#5bc0eb",
+      "voiceId": "",
+      "soulFile": "ambassadors/ambassador-1/soul.md",
+      "portrait": "ambassadors/ambassador-1/portrait.png"
+    },
+    {
+      "id": "ambassador-2",
+      "name": "Ambassador 2",
+      "specialty": "strategy",
+      "color": "#e63946",
+      "voiceId": "",
+      "soulFile": "ambassadors/ambassador-2/soul.md",
+      "portrait": "ambassadors/ambassador-2/portrait.png"
+    },
+    {
+      "id": "ambassador-3",
+      "name": "Ambassador 3",
+      "specialty": "resources",
+      "color": "#6a994e",
+      "voiceId": "",
+      "soulFile": "ambassadors/ambassador-3/soul.md",
+      "portrait": "ambassadors/ambassador-3/portrait.png"
+    },
+    {
+      "id": "ambassador-4",
+      "name": "Ambassador 4",
+      "specialty": "diplomacy",
+      "color": "#1d3557",
+      "voiceId": "",
+      "soulFile": "ambassadors/ambassador-4/soul.md",
+      "portrait": "ambassadors/ambassador-4/portrait.png"
+    },
+    {
+      "id": "ambassador-5",
+      "name": "Ambassador 5",
+      "specialty": "intelligence",
+      "color": "#7b2d8e",
+      "voiceId": "",
+      "soulFile": "ambassadors/ambassador-5/soul.md",
+      "portrait": "ambassadors/ambassador-5/portrait.png"
+    },
+    {
+      "id": "ambassador-6",
+      "name": "Ambassador 6",
+      "specialty": "morale",
+      "color": "#f4a261",
+      "voiceId": "",
+      "soulFile": "ambassadors/ambassador-6/soul.md",
+      "portrait": "ambassadors/ambassador-6/portrait.png"
+    }
+  ],
+  "terrain": {
+    "grass": { "color": "#7ec850", "darkColor": "#4a7a2e", "walkable": true, "image": "terrain/grass.png" },
+    "forest": { "color": "#2d5a27", "darkColor": "#1a3a18", "walkable": true, "image": "terrain/forest.png" },
+    "water": { "color": "#4a90d9", "darkColor": "#2a5a8a", "walkable": false, "image": "terrain/water.png" },
+    "mountain": { "color": "#8a7a6a", "darkColor": "#5a4a3a", "walkable": false, "image": "terrain/mountain.png" },
+    "desert": { "color": "#d4b896", "darkColor": "#a08060", "walkable": true, "image": "terrain/desert.png" },
+    "road": { "color": "#c4a882", "darkColor": "#8a7060", "walkable": true, "image": "terrain/road.png" },
+    "sand": { "color": "#e8d5a3", "darkColor": "#c4a870", "walkable": true, "image": "terrain/sand.png" }
+  },
+  "resources": [
+    { "type": "apple", "image": "fruits/apple.png", "value": 1 },
+    { "type": "banana", "image": "fruits/banana.png", "value": 1 },
+    { "type": "cherries", "image": "fruits/cherries.png", "value": 2 },
+    { "type": "grapes", "image": "fruits/grapes.png", "value": 2 },
+    { "type": "mango", "image": "fruits/mango.png", "value": 3 },
+    { "type": "pineapple", "image": "fruits/pineapple.png", "value": 3 },
+    { "type": "watermelon", "image": "fruits/watermelon.png", "value": 5 },
+    { "type": "coconut", "image": "fruits/coconut.png", "value": 4 },
+    { "type": "strawberry", "image": "fruits/strawberry.png", "value": 2 },
+    { "type": "orange", "image": "fruits/orange.png", "value": 1 },
+    { "type": "lemon", "image": "fruits/lemon.png", "value": 1 },
+    { "type": "pear", "image": "fruits/pear.png", "value": 1 },
+    { "type": "blueberry", "image": "fruits/blueberry.png", "value": 2 },
+    { "type": "plum", "image": "fruits/plum.png", "value": 2 },
+    { "type": "apricot", "image": "fruits/apricot.png", "value": 1 },
+    { "type": "avocado", "image": "fruits/avocado.png", "value": 3 }
+  ]
+}

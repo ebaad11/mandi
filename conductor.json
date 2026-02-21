@@ -1,5 +1,6 @@
 {
     "scripts": {
-        "setup": "bun install"
+        "setup": "bun install",
+        "run": "bun dev"
     }
 }
