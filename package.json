@@ -1,8 +1,8 @@
 {
-  "name": "hello-app",
+  "name": "tile-grid",
   "type": "module",
   "version": "1.0.0",
-  "description": "MCP server: hello-app",
+  "description": "Per-user 2D tile grid with persistent position tracking",
   "author": "",
   "license": "MIT",
   "keywords": [
@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@openai/apps-sdk-ui": "^0.2.1",
+    "convex": "^1.32.0",
     "mcp-use": "latest",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

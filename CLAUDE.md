@@ -1,5 +1,13 @@
 # Project Configuration
 
+## Runtime
+
+This project uses **Bun** as the JavaScript runtime and package manager. Always use `bun` instead of `npm`/`npx`/`node`:
+- `bun install` instead of `npm install`
+- `bun add <pkg>` instead of `npm install <pkg>`
+- `bunx <cmd>` instead of `npx <cmd>`
+- `bun run <script>` instead of `npm run <script>`
+
 ## Skills
 
 This project includes the following Claude Code skills:
