@@ -384,6 +384,23 @@ export const getTerritoryCount = query({
   },
 });
 
+export const internalReleaseTiles = internalMutation({
+  args: { ownerId: v.string() },
+  handler: async (ctx, { ownerId }) => {
+    const tiles = await ctx.db
+      .query("tiles")
+      .withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId))
+      .collect();
+    for (const tile of tiles) {
+      await ctx.db.patch(tile._id, {
+        ownerId: null,
+        improvement: "none",
+        fortifiedBy: null,
+      });
+    }
+  },
+});
+
 export const internalFortifyTile = internalMutation({
   args: { q: v.number(), r: v.number(), unitId: v.string() },
   handler: async (ctx, { q, r, unitId }) => {

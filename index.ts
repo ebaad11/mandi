@@ -86,13 +86,63 @@ const server = new MCPServer({
   oauth: oauthWorkOSProvider(),
 });
 
+// Pending action shape passed to widget
+interface PendingActionProp {
+  unitId: string;
+  type: string;
+  fromQ: number;
+  fromR: number;
+  targetQ: number;
+  targetR: number;
+}
+
+// Helper: fetch player's queued actions with unit positions resolved.
+// Chains sequential moves for the same unit so ghosts form a trajectory
+// (e.g. move A→B then B→C, not two arrows from A).
+async function fetchPendingActions(userId: string): Promise<PendingActionProp[]> {
+  const [actions, units] = await Promise.all([
+    convex.query(api.actions.getQueuedActions, { playerId: userId }),
+    convex.query(api.units.getUnitsForPlayer, { ownerId: userId }),
+  ]);
+  const unitMap = new Map((units as UnitResult[]).map((u) => [u._id, u]));
+
+  // Track the "current" position per unit — starts at DB position,
+  // then advances to each action's target so the next action chains from there.
+  const unitPos = new Map<string, { q: number; r: number }>();
+  for (const u of units as UnitResult[]) {
+    unitPos.set(u._id, { q: u.q, r: u.r });
+  }
+
+  // Actions are returned in insertion order (submittedAt) from Convex
+  return (actions as any[]).map((a) => {
+    const uid = a.unitId ?? "";
+    const pos = uid ? unitPos.get(uid) : null;
+    const fromQ = pos?.q ?? a.targetQ;
+    const fromR = pos?.r ?? a.targetR;
+
+    // Advance the tracked position so the next action for this unit chains
+    if (uid && (a.type === "move" || a.type === "attack")) {
+      unitPos.set(uid, { q: a.targetQ, r: a.targetR });
+    }
+
+    return {
+      unitId: uid,
+      type: a.type,
+      fromQ,
+      fromR,
+      targetQ: a.targetQ,
+      targetR: a.targetR,
+    };
+  });
+}
+
 // Helper: get player map data centered on units
 async function buildMapProps(
   userId: string,
   centerQ: number,
   centerR: number,
   playerColor: string,
-  pendingActionType?: string
+  pendingActions?: PendingActionProp[]
 ) {
   // Single Convex call — tiles + units + player colors in one HTTP round-trip
   const bundle = await convex.query(api.tiles.getMapBundle, {
@@ -138,6 +188,16 @@ async function buildMapProps(
         type: u.type,
         ownerColor: playerColors.find((p) => p.userId === u.ownerId)?.color ?? "#888",
         isOwnUnit: u.ownerId === userId,
+        // Include stats for own units so the widget can display info & compute ranges
+        ...(u.ownerId === userId && {
+          name: u.name,
+          hp: u.hp,
+          maxHp: u.maxHp,
+          atk: u.atk,
+          def: u.def,
+          mov: u.mov,
+          status: u.status,
+        }),
       })),
     };
   });
@@ -145,9 +205,10 @@ async function buildMapProps(
   return {
     tiles: tileProps,
     playerColor,
+    playerId: userId,
     centerQ,
     centerR,
-    ...(pendingActionType ? { pendingActionType } : {}),
+    ...(pendingActions && pendingActions.length > 0 ? { pendingActions } : {}),
   };
 }
 
@@ -193,12 +254,59 @@ server.tool(
       userId,
     });
 
-    const mapProps = await buildMapProps(userId, centerQ, centerR, player.color);
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player),
+    ]);
+    const mapProps = await buildMapProps(userId, centerQ, centerR, player.color, pendingActions);
 
     return widget({
-      props: { view: "map", map: mapProps },
+      props: {
+        view: "map",
+        map: { ...mapProps, playerStats },
+      },
       output: text(
         `Welcome back, ${player.leaderName} of ${player.civName}! AP: ${player.actionPoints}/${player.maxActionPoints}. Use get-profile to see resources, get-map to explore, or issue orders to your units.`
+      ),
+    });
+  }
+);
+
+// --- RESTART ---
+server.tool(
+  {
+    name: "restart",
+    description:
+      "Completely wipe your civilization and start over. Deletes your player, advisor, units, pending actions, and releases all owned tiles. Returns you to the onboarding screen so you can re-create from scratch.",
+    schema: z.object({}),
+    widget: {
+      name: "game-widget",
+      invoking: "Erasing your civilization...",
+      invoked: "Civilization erased",
+    },
+  },
+  async (_args, ctx) => {
+    const userId = ctx.auth.user.userId;
+    const player = await convex.query(api.players.getPlayer, { userId });
+    if (!player) {
+      return widget({
+        props: {
+          view: "onboarding",
+          onboarding: {},
+        },
+        output: text("You don't have a civilization yet. Use the onboard tool to create one."),
+      });
+    }
+
+    await convex.action(api.players.resetPlayer, { userId });
+
+    return widget({
+      props: {
+        view: "onboarding",
+        onboarding: {},
+      },
+      output: text(
+        "Your civilization has been erased from history. Use the onboard tool to found a new civilization."
       ),
     });
   }
@@ -335,18 +443,24 @@ server.tool(
       userId,
     });
 
-    // Build map props
-    const mapProps = await buildMapProps(
-      userId,
-      player.startQ,
-      player.startR,
-      player.color
-    );
+    // Claim the starting tile with a settlement so the player owns territory from the start
+    await convex.mutation(api.tiles.claimTile, {
+      q: player.startQ,
+      r: player.startR,
+      ownerId: userId,
+      improvement: "settlement",
+    });
+
+    // Build map props (no pending actions for fresh onboard)
+    const [mapProps, playerStats] = await Promise.all([
+      buildMapProps(userId, player.startQ, player.startR, player.color, []),
+      buildPlayerStats(player),
+    ]);
 
     return widget({
       props: {
         view: "map",
-        map: mapProps,
+        map: { ...mapProps, playerStats },
       },
       output: text(
         `Welcome, ${args.leaderName}! Your civilization "${args.civName}" has been founded. ` +
@@ -390,12 +504,16 @@ server.tool(
       userId,
     });
 
-    const mapProps = await buildMapProps(userId, centerQ, centerR, player.color);
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player),
+    ]);
+    const mapProps = await buildMapProps(userId, centerQ, centerR, player.color, pendingActions);
 
     return widget({
       props: {
         view: "map",
-        map: mapProps,
+        map: { ...mapProps, playerStats },
       },
       output: text(
         `Map centered at (${centerQ}, ${centerR}). AP: ${player.actionPoints}/${player.maxActionPoints}.`
@@ -444,6 +562,7 @@ server.tool(
             actionPoints: player.actionPoints,
             maxActionPoints: player.maxActionPoints,
             apResetsAt: player.apResetsAt,
+            nextTickAt: ((await convex.query(api.ticks.getLastTick, {})) ?? Date.now()) + 2 * 60 * 1000,
           },
           advisor: advisor
             ? {
@@ -550,6 +669,35 @@ async function validatePlayerAndUnit(
   return { player };
 }
 
+async function buildPlayerStats(player: any, apOverride?: number) {
+  const [advisor, lastTickResolvedAt] = await Promise.all([
+    convex.query(api.advisors.getAdvisor, { playerId: player._id }),
+    convex.query(api.ticks.getLastTick, {}),
+  ]);
+  const nextTickAt = (lastTickResolvedAt ?? Date.now()) + 2 * 60 * 1000;
+  return {
+    leaderName: player.leaderName,
+    civName: player.civName,
+    grain: player.grain,
+    stone: player.stone,
+    gold: player.gold,
+    knowledge: player.knowledge,
+    actionPoints: apOverride !== undefined ? apOverride : player.actionPoints,
+    maxActionPoints: player.maxActionPoints,
+    apResetsAt: player.apResetsAt,
+    nextTickAt,
+    advisor: advisor
+      ? {
+          name: advisor.name,
+          title: advisor.title,
+          mood: advisor.mood,
+          catchphrase: advisor.catchphrase,
+          loyaltyScore: advisor.loyaltyScore,
+        }
+      : undefined,
+  };
+}
+
 // --- MOVE ---
 server.tool(
   {
@@ -593,9 +741,14 @@ server.tool(
     });
 
     const remaining = player!.actionPoints - AP_COSTS.move;
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player!, remaining),
+    ]);
+    const moveMapProps = await buildMapProps(userId, args.targetQ, args.targetR, player!.color, pendingActions);
     return widget({
-      props: { view: "map", map: await buildMapProps(userId, args.targetQ, args.targetR, player!.color, "move") },
-      output: text(`Move queued to (${args.targetQ}, ${args.targetR}). AP remaining: ${remaining}. Resolves at next tick (every 15 min).`),
+      props: { view: "map", map: { ...moveMapProps, playerStats } },
+      output: text(`Move queued to (${args.targetQ}, ${args.targetR}). AP remaining: ${remaining}. Resolves at next tick (every 2 min).`),
     });
   }
 );
@@ -642,8 +795,13 @@ server.tool(
     });
 
     const remaining = player!.actionPoints - AP_COSTS.attack;
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player!, remaining),
+    ]);
+    const attackMapProps = await buildMapProps(userId, args.targetQ, args.targetR, player!.color, pendingActions);
     return widget({
-      props: { view: "map", map: await buildMapProps(userId, args.targetQ, args.targetR, player!.color, "attack") },
+      props: { view: "map", map: { ...attackMapProps, playerStats } },
       output: text(`Attack queued at (${args.targetQ}, ${args.targetR}). AP remaining: ${remaining}. Resolves at next tick.`),
     });
   }
@@ -693,8 +851,13 @@ server.tool(
     });
 
     const remaining = player!.actionPoints - AP_COSTS.defend;
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player!, remaining),
+    ]);
+    const defendMapProps = await buildMapProps(userId, targetUnit.q, targetUnit.r, player!.color, pendingActions);
     return widget({
-      props: { view: "map", map: await buildMapProps(userId, targetUnit.q, targetUnit.r, player!.color, "defend") },
+      props: { view: "map", map: { ...defendMapProps, playerStats } },
       output: text(`Defend queued at (${targetUnit.q}, ${targetUnit.r}). AP remaining: ${remaining}. Resolves at next tick.`),
     });
   }
@@ -742,8 +905,13 @@ server.tool(
     });
 
     const remaining = player!.actionPoints - AP_COSTS.invest;
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player!, remaining),
+    ]);
+    const investMapProps = await buildMapProps(userId, args.targetQ, args.targetR, player!.color, pendingActions);
     return widget({
-      props: { view: "map", map: await buildMapProps(userId, args.targetQ, args.targetR, player!.color, "invest") },
+      props: { view: "map", map: { ...investMapProps, playerStats } },
       output: text(`Invest queued at (${args.targetQ}, ${args.targetR}). AP remaining: ${remaining}. Resolves at next tick.`),
     });
   }
@@ -791,8 +959,13 @@ server.tool(
     });
 
     const remaining = player!.actionPoints - AP_COSTS.found;
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player!, remaining),
+    ]);
+    const foundMapProps = await buildMapProps(userId, args.targetQ, args.targetR, player!.color, pendingActions);
     return widget({
-      props: { view: "map", map: await buildMapProps(userId, args.targetQ, args.targetR, player!.color, "found") },
+      props: { view: "map", map: { ...foundMapProps, playerStats } },
       output: text(`Settlement founding queued at (${args.targetQ}, ${args.targetR}). AP remaining: ${remaining}. Resolves at next tick.`),
     });
   }
@@ -842,8 +1015,13 @@ server.tool(
     });
 
     const remaining = player!.actionPoints - AP_COSTS.scout;
+    const [pendingActions, playerStats] = await Promise.all([
+      fetchPendingActions(userId),
+      buildPlayerStats(player!, remaining),
+    ]);
+    const scoutMapProps = await buildMapProps(userId, targetUnit.q, targetUnit.r, player!.color, pendingActions);
     return widget({
-      props: { view: "map", map: await buildMapProps(userId, targetUnit.q, targetUnit.r, player!.color, "scout") },
+      props: { view: "map", map: { ...scoutMapProps, playerStats } },
       output: text(`Scout action queued at (${targetUnit.q}, ${targetUnit.r}). AP remaining: ${remaining}. Fog will be revealed at next tick.`),
     });
   }

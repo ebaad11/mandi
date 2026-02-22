@@ -108,6 +108,19 @@ export const incrementLoyalty = mutation({
   },
 });
 
+export const internalDeleteAdvisor = internalMutation({
+  args: { playerId: v.id("players") },
+  handler: async (ctx, { playerId }) => {
+    const advisor = await ctx.db
+      .query("advisors")
+      .withIndex("by_playerId", (q) => q.eq("playerId", playerId))
+      .first();
+    if (advisor) {
+      await ctx.db.delete(advisor._id);
+    }
+  },
+});
+
 export const internalUpdateMood = internalMutation({
   args: {
     advisorId: v.id("advisors"),

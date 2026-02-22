@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-crons.interval("tick-15min", { minutes: 15 }, internal.ticks.resolveTick);
-crons.interval("ap-hourly", { hours: 1 }, internal.ticks.resetAllAP);
+crons.interval("tick-2min", { minutes: 2 }, internal.ticks.resolveTick);
+crons.interval("ap-10min", { minutes: 10 }, internal.ticks.resetAllAP);
 
 export default crons;

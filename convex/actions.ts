@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, internalQuery } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 
 export const queueAction = mutation({
   args: {
@@ -84,6 +84,21 @@ export const getActionsForTick = internalQuery({
         (ACTION_ORDER.indexOf(a.type) ?? 99) -
         (ACTION_ORDER.indexOf(b.type) ?? 99)
     );
+  },
+});
+
+export const internalCancelAllActions = internalMutation({
+  args: { playerId: v.string() },
+  handler: async (ctx, { playerId }) => {
+    const actions = await ctx.db
+      .query("pendingActions")
+      .withIndex("by_playerId_status", (q) =>
+        q.eq("playerId", playerId).eq("status", "queued")
+      )
+      .collect();
+    for (const action of actions) {
+      await ctx.db.patch(action._id, { status: "cancelled" });
+    }
   },
 });
 
