@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery, internalMutation } from "./_generated/server";
+import { mutation, query, action, internalQuery, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 const PLAYER_COLORS = [
   "#e63946", "#2a9d8f", "#e9c46a", "#6a4c93",
@@ -61,7 +62,7 @@ export const createPlayer = mutation({
       knowledge: 3,
       actionPoints: 10,
       maxActionPoints: 10,
-      apResetsAt: now + 60 * 60 * 1000,
+      apResetsAt: now + 10 * 60 * 1000,
       status: "active",
       onboarded: true,
       color,
@@ -110,7 +111,7 @@ export const resetAP = mutation({
     if (!player) return;
     await ctx.db.patch(playerId, {
       actionPoints: player.maxActionPoints,
-      apResetsAt: Date.now() + 60 * 60 * 1000,
+      apResetsAt: Date.now() + 10 * 60 * 1000,
     });
   },
 });
@@ -148,9 +149,49 @@ export const internalResetAP = internalMutation({
     for (const player of players) {
       await ctx.db.patch(player._id, {
         actionPoints: player.maxActionPoints,
-        apResetsAt: now + 60 * 60 * 1000,
+        apResetsAt: now + 10 * 60 * 1000,
       });
     }
+  },
+});
+
+export const internalGetPlayer = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    return await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .first();
+  },
+});
+
+export const internalDeletePlayer = internalMutation({
+  args: { playerId: v.id("players") },
+  handler: async (ctx, { playerId }) => {
+    await ctx.db.delete(playerId);
+  },
+});
+
+export const resetPlayer = action({
+  args: { userId: v.string() },
+  handler: async (ctx, { userId }) => {
+    const player = await ctx.runQuery(internal.players.internalGetPlayer, { userId });
+    if (!player) throw new Error("Player not found");
+
+    // Delete advisor
+    await ctx.runMutation(internal.advisors.internalDeleteAdvisor, { playerId: player._id });
+
+    // Delete all units
+    await ctx.runMutation(internal.units.internalDeleteAllUnits, { ownerId: userId });
+
+    // Cancel all pending actions
+    await ctx.runMutation(internal.actions.internalCancelAllActions, { playerId: userId });
+
+    // Release all owned tiles
+    await ctx.runMutation(internal.tiles.internalReleaseTiles, { ownerId: userId });
+
+    // Delete player record
+    await ctx.runMutation(internal.players.internalDeletePlayer, { playerId: player._id });
   },
 });
 

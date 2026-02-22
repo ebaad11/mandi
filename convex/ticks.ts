@@ -1,5 +1,13 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import { hexesInRadius } from "./tiles";
+
+export const getLastTick = query({
+  args: {},
+  handler: async (ctx) => {
+    const lastTick = await ctx.db.query("ticks").order("desc").first();
+    return lastTick ? lastTick.resolvedAt : null;
+  },
+});
 
 export const resolveTick = internalMutation({
   args: {},
@@ -416,7 +424,7 @@ export const resetAllAP = internalMutation({
     for (const player of players) {
       await ctx.db.patch(player._id, {
         actionPoints: player.maxActionPoints,
-        apResetsAt: now + 60 * 60 * 1000,
+        apResetsAt: now + 10 * 60 * 1000,
       });
     }
   },

@@ -124,6 +124,19 @@ export const killUnit = mutation({
   },
 });
 
+export const internalDeleteAllUnits = internalMutation({
+  args: { ownerId: v.string() },
+  handler: async (ctx, { ownerId }) => {
+    const units = await ctx.db
+      .query("units")
+      .withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId))
+      .collect();
+    for (const unit of units) {
+      await ctx.db.delete(unit._id);
+    }
+  },
+});
+
 export const internalCreateUnit = internalMutation({
   args: {
     ownerId: v.string(),
